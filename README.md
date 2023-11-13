@@ -2,13 +2,15 @@
 
 ## Problem
 
-You've got a bunch of runs to do inside of a container, but your HPC won't pipe your multirun through sbatch? 
+You've got a bunch of runs to do inside of a container, but it's pretty hard to call them through Slurm? 
 
-(Think hydra multirun~)
+For example: you've got Hydra setup inside of the container, but you can't use hydra's `multirun`, because, well hydra is INSIDE the container, and the thing that summons tasks is OUTSIDE the container.
 
 ## Solution
 
 Slay the hydra 🤪
+
+Basically we just re-implement a very naive version of `multirun` OUTSIDE the container so that SLURM can understand it.
 
 ## How it works
 
@@ -60,14 +62,14 @@ singularity --quiet exec --nv -H ~/projects/ACCOUNT/USER/PROJ/temp/ \
 
 Let's look at Heracles' options:
 
-| Option                                              | Function                                                                               | Why use it                                                       |   |   |
-|-----------------------------------------------------|----------------------------------------------------------------------------------------|------------------------------------------------------------------|---|---|
-| -w, --write, -n, --noop                             | Writes down all the products                                                           | Check that the script writes down the correct runs               |   |   |
-| -r=\<s\>, -\-run=\<s\>, -m=\<s\>, -\-multirun=\<s\> | Writes down all the products and subsequently calls `<s> <file>` for all written files | Run your runs lol                                                |   |   |
-| -d, --delete, -c, --clear                           | Writes down all the products and then deletes them                                     | Clears your directory from the billion files created by heracles |   |   |
+| Option                                              | Function                                                                                                         | Why use it                                                       |   |   |
+|-----------------------------------------------------|------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------|---|---|
+| -w, --write, -n, --noop                             | Writes down all the products                                                                                     | Check that the script writes down the correct runs               |   |   |
+| -r=\<s\>, -\-run=\<s\>, -m=\<s\>, -\-multirun=\<s\> | Writes down all the products and subsequently calls `<s> <file>` for all written files. Then, deletes the files. | Run your runs lol                                                |   |   |
+| -d, --delete, -c, --clear                           | Writes down all the products and then deletes them                                                               | Clears your directory from the billion files created by heracles |   |   |
 
 So if you want to both write AND run the files, use 
-`heracles sbatch.sh -r=sbatch env.num_envs=8,16,32 seed=__randseed(90)__ env.name=HalfCheetah,Reacher`. 
+`heracles sbatch.sh -r=sbatch env.num_envs=8,16,32 env.name=HalfCheetah,Reacher`. 
 
 ### What about seeds?
 
@@ -96,7 +98,7 @@ Then run Heracles as normal: `heracles sbatch.sh -w env.num_envs=8,16,32 env.nam
 #### I want a unique seed per product
 
 Heracles has a unique little util called `__randperm__`. You can use it like so: 
-`heracles sbatch.sh -w env.num_envs=8,16,32 seed=__randseed(90)__ env.name=HalfCheetah,Reacher`. The syntax is
+`heracles sbatch.sh -w env.num_envs=8,16,32 seed=__randseed(90)__ env.name=HalfCheetah,Reacher`. Basically
 `__randperm(N)__` -> generate N random ints and add them as elements of the cartesian product. For syntactic sugar reasons,
 you can use `__randperm__` instead of `__randperm(1)__`.
 
