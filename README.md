@@ -99,3 +99,8 @@ Heracles has a unique little util called `__randperm__`. You can use it like so:
 `heracles sbatch.sh -w env.num_envs=8,16,32 seed=__randseed(90)__ env.name=HalfCheetah,Reacher`. The syntax is
 `__randperm(N)__` -> generate N random ints and add them as elements of the cartesian product. For syntactic sugar reasons,
 you can use `__randperm__` instead of `__randperm(1)__`.
+
+## That's very cool Charlie thanks for the show-and-tell. How do I install it?
+
+Literally just copy paste the file into your HPC login node or whatever. Or git clone it. 
+There's no dependencies except for python and its standard libs.
