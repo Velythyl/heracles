@@ -1,0 +1,147 @@
+#!/usr/bin/python3
+
+import itertools
+import random
+import re
+import sys
+import time
+
+random.seed(int(time.time_ns()))
+
+def marshallval(val_string):
+    def randseed():
+        x = re.match(r"__randseed__", val_string)
+        if x is not None:
+            return ["__randseed__"]
+
+        x = re.match(r"__randseed\((\d+)\)__", val_string)
+        if x is not None:
+            return ["__randseed__"] * int(x.group(1))
+
+    def mk_range():
+        def thunk():
+            x = re.match(r"range\((\d+)\)|range\((\d+,\d+)\)|range\((\d+,\d+,\d+)\)", val_string)
+            if x is not None:
+                for i in range(3):
+                    if x.group(i + 1) is not None:
+                        splat = list(map(int, x.group(i + 1).split(",")))
+                        return range(*splat)
+            raise ValueError()
+
+        x = list(map(str, list(thunk())))
+        return x
+
+    def mk_list():
+        x = re.match(r"(.+,)|.+", val_string)
+        if x is not None:
+            return val_string.split(",")
+
+    for func in [randseed, mk_range, mk_list]:
+        try:
+            ret = func()
+            if ret is None:
+                continue
+            else:
+                return ret
+        except Exception as e:
+            pass
+    return val_string
+
+
+def write():
+    def get_products(args):
+        name2sweep = {}
+        for arg in args:
+            name, vals = arg.split("=")
+            name2sweep[name] = marshallval(vals)
+
+        fullbodied = []
+        for name, vals in name2sweep.items():
+            body = []
+            for val in vals:
+                body.append(f"{name}={val}")
+            fullbodied.append(body)
+
+        products = [' '.join(tup) for tup in itertools.product(*fullbodied)]
+
+        class SeedManager:
+            def __init__(self):
+                self.prevs = set()
+
+            def gen(self):
+                x = random.randint(0, 10_000)  # todo adjust this as need
+                if x in self.prevs:
+                    return self.gen()
+                else:
+                    self.prevs.add(x)
+                    return x
+
+        seed_manager = SeedManager()
+        ret = []
+        for product in products:
+            if "__randseed__" not in product:
+                ret.append(product)
+                continue
+
+            splitted = product.split("__randseed__")
+            remake = []
+            for s in splitted[:-1]:
+                remake.append(s)
+                remake.append(str(seed_manager.gen()))
+            remake.append(splitted[-1])
+            ret.append("".join(remake))
+        return ret
+
+    def get_mother(mother_name):
+
+        with open(mother_name, "r") as f:
+            text = f.read()
+
+        mother_split = mother_name.split(".")
+        mother_base = ".".join(mother_split[:-1])
+        mother_ext = mother_split[-1]
+
+        return text, mother_base, mother_ext
+
+    mother_name = sys.argv[1]
+    args = sys.argv[3:]
+
+    runs = []
+    mother_text, mother_base, mother_ext = get_mother(mother_name)
+    for i, product in enumerate(get_products(args)):
+        new_text = mother_text + f" {product}"
+
+        run_name = f"{mother_base}_hydra{i}.{mother_ext}"
+        with open(run_name, "w") as f:
+            f.write(new_text)
+        runs.append(run_name)
+    return runs
+
+
+action = sys.argv[2]
+if action in ["-w", "--write", "-n", "--noop"]:
+    write()
+    exit(0)
+
+if action in ["-d", "--delete", "-c", "--clear"]:
+    run_names = write()
+    for run in run_names:
+        import os
+        os.remove(run)
+    exit(0)
+
+for action_type in ["-r", "--run", "-m", "--multirun"]:
+    run_names = write()
+    if action.startswith(action_type):
+        split_action = action.split("=")
+        assert len(split_action) == 2
+
+        for run in run_names:
+            import subprocess
+            ret = subprocess.check_output(f"{split_action[-1]} {run}", shell=True, universal_newlines=True,
+                                    stderr=subprocess.STDOUT)
+            print(ret)
+        exit(0)
+
+print("If you see this message, you probably wrote an action that doesn't exist. Look at the source code ;P")
+exit(1)
